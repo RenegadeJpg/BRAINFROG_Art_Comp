@@ -1,4 +1,5 @@
 // Organization: Rockin' Freeworld Foundation
+// Project: BRAINFROG
 // Author: RenegadeJpg
 // Title: BF Art Competition Contract
 // Description: A Soroban smart contract for managing art competitions, allowing artists to submit artworks, vote on them, and determine winners.
