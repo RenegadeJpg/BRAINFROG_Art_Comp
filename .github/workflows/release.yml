@@ -4,13 +4,19 @@ on:
     tags:
       - 'v*'  # triggered whenever a new tag (prefixed with "v") is pushed to the repository
 
+permissions:  
+  id-token: write
+  contents: write
+  attestations: write
+
 jobs:
   release-bf-competition:
     uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
     with:
       release_name: ${{ github.ref_name }}
       release_description: 'BF Art Competition Contract Release - Soroban smart contract for managing art competitions with voting and prize distribution'
-      relative_path: bf_competition
+      relative_path: 'bf_competition'
       package: 'bf_competition'
+      home_domain: 'brainfrog.io'
     secrets:
       release_token: ${{ secrets.GITHUB_TOKEN }}
