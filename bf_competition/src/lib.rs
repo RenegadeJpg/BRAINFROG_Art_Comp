@@ -4,7 +4,7 @@
 // Title: BF Art Competition Contract
 // Description: A Soroban smart contract for managing art competitions, allowing artists to submit artworks, vote on them, and determine winners.
 // This contract includes features for artist registration, competition management, voting, and artist metadata storage.
-// Version: 1.0.2
+// Version: 1.0.1
 #![no_std]
 
 use core::convert::TryInto;
