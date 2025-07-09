@@ -4,7 +4,7 @@
 // Title: BF Art Competition Contract
 // Description: A Soroban smart contract for managing art competitions, allowing artists to submit artworks, vote on them, and determine winners.
 // This contract includes features for artist registration, competition management, voting, and artist metadata storage.
-// Version: 1.0.0
+// Version: 1.0.2
 #![no_std]
 
 use core::convert::TryInto;
@@ -1218,7 +1218,7 @@ impl CompetitionContract {
     }
     /// Get the current contract version
     pub fn version(env: Env) -> String {
-        String::from_str(&env, "1.0.0")
+        String::from_str(&env, "1.0.2")
     }
     /// Get the current admins of the contract
     pub fn get_admins(env: Env) -> (Option<Address>, Option<Address>) {
