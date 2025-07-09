@@ -1218,7 +1218,7 @@ impl CompetitionContract {
     }
     /// Get the current contract version
     pub fn version(env: Env) -> String {
-        String::from_str(&env, "1.0.2")
+        String::from_str(&env, "1.0.1")
     }
     /// Get the current admins of the contract
     pub fn get_admins(env: Env) -> (Option<Address>, Option<Address>) {
