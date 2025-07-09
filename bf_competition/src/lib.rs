@@ -1,5 +1,5 @@
 // Organization: Rockin' Freeworld Foundation
-// Project: BRAINFROG
+// Project: BRAINFROG LLC
 // Author: RenegadeJpg
 // Title: BF Art Competition Contract
 // Description: A Soroban smart contract for managing art competitions, allowing artists to submit artworks, vote on them, and determine winners.
@@ -9,7 +9,7 @@
 
 use core::convert::TryInto;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, vec, Address, Env, IntoVal, Map, String,
+    contract, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, IntoVal, Map, String,
     Symbol, Vec,
 };
 
@@ -124,7 +124,6 @@ impl CompetitionContract {
             .instance()
             .set(&Symbol::new(&env, "admin2"), &admin2);
     }
-
     /// Update one or both admins of the contract {Only admins can update}
     pub fn update_admins(
         env: Env,
@@ -164,7 +163,39 @@ impl CompetitionContract {
                 .set(&Symbol::new(&env, "admin2"), &addr);
         }
     }
+    ///
+    /// Manually migrate a single artist from another contract {Only admins can migrate}
+    pub fn migrate_single_artist(env: Env, from: Address, artist_address: Address, artist_info: ArtistInfo) {
+        // Check if from is one of the two admins
+        let admin1: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "admin1"))
+            .unwrap();
+        let admin2: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "admin2"))
+            .unwrap();
+        assert!(
+            from == admin1 || from == admin2,
+            "Only admins can migrate artist info"
+        );
 
+        from.require_auth();
+
+        let artist_info_key = Symbol::new(&env, "artist_info");
+        let mut all_info: Map<Address, ArtistInfo> = env
+            .storage()
+            .instance()
+            .get(&artist_info_key)
+            .unwrap_or(Map::new(&env));
+
+        // Add the artist
+        all_info.set(artist_address, artist_info);
+        env.storage().instance().set(&artist_info_key, &all_info);
+    }
+    
     ///
     /// Create a new competition {Only admins can create}
     pub fn create_competition(
@@ -457,7 +488,31 @@ impl CompetitionContract {
         all_info.remove(artist_address);
         env.storage().instance().set(&artist_info_key, &all_info);
     }
-    
+
+    /// Upgrade the contract to a new implementation {Only admins can upgrade}
+    pub fn upgrade(env: Env, from: Address, new_wasm_hash: BytesN<32>) {
+        // Check if from is one of the two admins
+        let admin1: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "admin1"))
+            .unwrap();
+        let admin2: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "admin2"))
+            .unwrap();
+        assert!(
+            from == admin1 || from == admin2,
+            "Only admins can upgrade contract"
+        );
+
+        from.require_auth();
+
+        // Upgrade the contract to the new WASM hash
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
     /// ***{User Write Fn for Art Competition}***
     ///
     /// Vote for an artist in a competition (one vote per wallet)
@@ -545,7 +600,7 @@ impl CompetitionContract {
     /// Pays the competition winners
     pub fn pay_winners(env: Env, id: String) {
         let mut comp: Competition = env.storage().instance().get(&id).unwrap();
-        
+
         let now = env.ledger().timestamp();
         assert!(now > comp.vote_end, "Voting still active");
 
@@ -684,30 +739,32 @@ impl CompetitionContract {
         if leftover > 0 && artist_votes.len() > 0 {
             // Calculate total share percentage used by actual winners
             let mut total_winner_share = 0u64;
-            let winners_count = artist_votes.iter()
+            let winners_count = artist_votes
+                .iter()
                 .take_while(|(_, votes)| *votes > 0)
                 .count()
                 .min(share.len().try_into().unwrap());
-            
+
             for i in 0..winners_count {
                 if i < share.len().try_into().unwrap() {
                     total_winner_share += share.get(i as u32).unwrap() as u64;
                 }
             }
-            
+
             if total_winner_share > 0 {
                 // Distribute leftover proportionally based on their original share
                 for i in 0..winners_count {
-                    if i < artist_votes.len().try_into().unwrap() 
-                        && artist_votes.get(i.try_into().unwrap()).unwrap().1 > 0 
+                    if i < artist_votes.len().try_into().unwrap()
+                        && artist_votes.get(i.try_into().unwrap()).unwrap().1 > 0
                         && i < share.len().try_into().unwrap()
                     {
-                        let artist_name = artist_votes.get(i.try_into().unwrap()).unwrap().0.clone();
+                        let artist_name =
+                            artist_votes.get(i.try_into().unwrap()).unwrap().0.clone();
                         let artist_share = share.get(i as u32).unwrap() as u64;
-                        
+
                         // Calculate proportional share of leftover
                         let proportional_amount = (leftover * artist_share) / total_winner_share;
-                        
+
                         if proportional_amount > 0 {
                             let mut artist_address: Option<Address> = None;
                             for (addr, name) in comp.artists.iter() {
@@ -719,17 +776,18 @@ impl CompetitionContract {
                             if let Some(addr) = artist_address {
                                 let amt_stroop = proportional_amount * multiplier;
                                 if amt_stroop > 0 {
-                                    let _ = env.try_invoke_contract::<(), soroban_sdk::InvokeError>(
-                                        &comp.token,
-                                        &symbol_short!("transfer"),
-                                        vec![
-                                            &env,
-                                            env.current_contract_address().into_val(&env),
-                                            addr.into_val(&env),
-                                            (amt_stroop as i128).into_val(&env),
-                                        ],
-                                    );
-                                }
+                                    let _ = env
+                                        .try_invoke_contract::<(), soroban_sdk::InvokeError>(
+                                            &comp.token,
+                                            &symbol_short!("transfer"),
+                                            vec![
+                                                &env,
+                                                env.current_contract_address().into_val(&env),
+                                                addr.into_val(&env),
+                                                (amt_stroop as i128).into_val(&env),
+                                            ],
+                                        );
+                            }
                             }
                         }
                     }
@@ -753,6 +811,8 @@ impl CompetitionContract {
         description: String,
         img_url: String,
     ) {
+        artist_address.require_auth();
+
         let now = env.ledger().timestamp();
 
         // Check if competition exists
@@ -867,6 +927,8 @@ impl CompetitionContract {
         mediums: Vec<Medium>,
         blockchains: Vec<Network>,
     ) {
+        from.require_auth();
+
         let artist_info_key = Symbol::new(&env, "artist_info");
 
         // Load all artist info map: Address -> ArtistInfo
@@ -911,6 +973,8 @@ impl CompetitionContract {
         mediums: Option<Vec<Medium>>,
         blockchains: Option<Vec<Network>>,
     ) {
+        from.require_auth();
+
         let artist_info_key = Symbol::new(&env, "artist_info");
         let mut all_info: Map<Address, ArtistInfo> = env
             .storage()
@@ -1152,7 +1216,10 @@ impl CompetitionContract {
             voting_active,
         }
     }
-
+    /// Get the current contract version
+    pub fn version(env: Env) -> String {
+        String::from_str(&env, "1.0.0")
+    }
     /// Get the current admins of the contract
     pub fn get_admins(env: Env) -> (Option<Address>, Option<Address>) {
         let admin1 = env
